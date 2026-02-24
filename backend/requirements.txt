@@ -5,3 +5,6 @@ pdfplumber
 openai
 razorpay
 python-dotenv
+sqlalchemy
+werkzeug
+pyjwt

@@ -145,17 +145,83 @@ Frontend → POST /payment/verify-payment → Backend verifies signature
 
 ## API Endpoints
 
+### Authentication
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/upload-and-generate` | Generate quiz from PDF |
-| GET | `/usage-status` | Check free/pro usage |
+| POST | `/auth/register` | Create new user account |
+| POST | `/auth/login` | Login and get JWT token |
+| GET | `/auth/me` | Get current user info |
+
+### Quiz Generation
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/upload-and-generate` | Generate quiz from PDF (requires auth) |
+| GET | `/usage-status` | Check daily/subscription usage (requires auth) |
+
+### Payments
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | POST | `/payment/create-order` | Create one-time payment |
-| POST | `/payment/verify-payment` | Verify payment |
+| POST | `/payment/verify-payment` | Verify payment (requires auth) |
 | POST | `/payment/create-plan` | Create subscription plans |
 | POST | `/payment/create-subscription` | Start subscription |
 | POST | `/payment/verify-subscription` | Verify subscription |
-| POST | `/payment/webhook` | Razorpay webhook handler |
-| GET | `/health` | Health check |
+
+---
+
+## Database Setup
+
+StudyQuizAI now includes SQLite database support for:
+- ✅ User authentication (registration & login)
+- ✅ Quiz history tracking
+- ✅ Usage limit tracking (daily limits for free users)
+- ✅ Payment records
+
+### Database Tables
+
+1. **users** — User accounts with subscription status
+2. **quizzes** — Generated quizzes from PDFs
+3. **quiz_results** — User quiz attempts and scores
+4. **payments** — Payment and subscription records
+
+### Initialize Database
+
+The database is automatically initialized when the app starts. To manually initialize:
+
+```bash
+cd backend
+python init_db.py
+```
+
+### Authentication Flow
+
+```
+1. User registers: POST /auth/register
+   → Creates user account, hashes password
+   → Returns JWT access token
+
+2. User login: POST /auth/login
+   → Validates credentials
+   → Returns JWT access token
+
+3. All quiz endpoints require:
+   → Authorization: Bearer <token> header
+```
+
+### Usage in Frontend
+
+Add JWT token to request headers:
+
+```javascript
+const token = localStorage.getItem('authToken');
+const response = await fetch('/upload-and-generate', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+  },
+  body: formData,
+});
+```
 
 ---
 
@@ -164,9 +230,9 @@ Frontend → POST /payment/verify-payment → Backend verifies signature
 - [ ] Replace `rzp_test_` keys with `rzp_live_` keys
 - [ ] Enable international payments in Razorpay Dashboard
 - [ ] Set webhook URL: `https://yourdomain.com/payment/webhook`
-- [ ] Replace in-memory storage with a real database (PostgreSQL/MongoDB)
-- [ ] Add user authentication (email/Google OAuth)
-- [ ] Test with a real ₹1 payment
+- [ ] Migrate from SQLite to PostgreSQL for production
+- [ ] Set up database backups
+- [ ] Add user authentication tests
 - [ ] Update CORS origins in `main.py`
 - [ ] Deploy backend + frontend (Railway / Render / AWS)
 

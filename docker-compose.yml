@@ -8,6 +8,10 @@ services:
     env_file:
       - .env.example
     restart: unless-stopped
+    volumes:
+      - ./backend/data:/app/data  # Persist SQLite database
+    environment:
+      - DATABASE_URL=sqlite:///./data/study_quiz_ai.db
 
   frontend:
     build: ./frontend
@@ -16,3 +20,7 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+
+volumes:
+  backend_data:
+    driver: local

@@ -5,3 +5,19 @@ __pycache__/
 *.pyc
 venv/
 .venv/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+backend/data/
+backend/study_quiz_ai.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
