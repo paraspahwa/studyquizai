@@ -39,7 +39,7 @@ export default function App() {
       setIsPro(data.is_pro);
     } catch {
       // Offline or backend not running — allow usage
-      setUsage({ allowed: true, is_pro: false, remaining: 3, limit: 3 });
+      setUsage({ allowed: true, is_pro: false, remaining: 1, limit: 1 });
     }
   };
 

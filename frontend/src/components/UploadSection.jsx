@@ -26,6 +26,12 @@ export default function UploadSection({ onGenerate, usage, onUpgrade }) {
   const handleFileSelect = (e) => {
     const selected = e.target.files[0];
     if (selected) {
+      // Validate file size for free users (10 MB max)
+      const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+      if (usage && !usage.is_pro && selected.size > MAX_FILE_SIZE) {
+        setError(`File is too large (${(selected.size / 1024 / 1024).toFixed(2)} MB). Free users can upload up to 10 MB. Upgrade to Pro for larger files!`);
+        return;
+      }
       setFile(selected);
       setError(null);
     }
@@ -49,7 +55,11 @@ export default function UploadSection({ onGenerate, usage, onUpgrade }) {
 
       if (!res.ok) {
         if (res.status === 429) {
-          setError("daily_limit");
+          setError("limit_reached");
+        } else if (res.status === 413) {
+          setError("file_too_large");
+        } else if (data.detail?.error) {
+          setError(data.detail.error);
         } else {
           setError(data.detail || "Something went wrong");
         }
@@ -73,9 +83,9 @@ export default function UploadSection({ onGenerate, usage, onUpgrade }) {
       {usage && !usage.is_pro && (
         <div style={styles.usageBar}>
           <div style={styles.usageInfo}>
-            <span style={styles.usageLabel}>Free quizzes today:</span>
+            <span style={styles.usageLabel}>Free quiz allowance:</span>
             <span style={styles.usageCount}>
-              {usage.remaining}/{usage.limit} remaining
+              {usage.remaining}/{usage.limit} available
             </span>
           </div>
           <div style={styles.progressBg}>
@@ -86,7 +96,7 @@ export default function UploadSection({ onGenerate, usage, onUpgrade }) {
               }}
             />
           </div>
-          {usage.remaining <= 1 && (
+          {usage.remaining <= 0 && (
             <button style={styles.upgradeNudge} onClick={onUpgrade}>
               ⚡ Upgrade to Pro for unlimited quizzes
             </button>
@@ -183,11 +193,21 @@ export default function UploadSection({ onGenerate, usage, onUpgrade }) {
       </div>
 
       {/* Error */}
-      {error === "daily_limit" ? (
+      {error === "limit_reached" ? (
         <div style={styles.limitError}>
-          <p style={styles.limitTitle}>🚫 Daily limit reached</p>
+          <p style={styles.limitTitle}>🚫 Limit reached</p>
           <p style={styles.limitText}>
-            You've used all 3 free quizzes today. Upgrade to Pro for unlimited access!
+            Free users can generate 1 quiz. You've already generated your free quiz. Upgrade to Pro for unlimited quizzes!
+          </p>
+          <button style={styles.upgradeBtn} onClick={onUpgrade}>
+            Upgrade to Pro →
+          </button>
+        </div>
+      ) : error === "file_too_large" ? (
+        <div style={styles.limitError}>
+          <p style={styles.limitTitle}>📁 File too large</p>
+          <p style={styles.limitText}>
+            Free users can upload up to 10 MB. Upgrade to Pro for larger files!
           </p>
           <button style={styles.upgradeBtn} onClick={onUpgrade}>
             Upgrade to Pro →

@@ -42,9 +42,8 @@ class User(Base):
     subscription_active = Column(Boolean, default=True)
     subscription_end_date = Column(DateTime, nullable=True)
     
-    # Usage tracking for free tier (resets daily)
-    daily_quizzes_used = Column(Integer, default=0)
-    daily_quizzes_date = Column(DateTime, default=datetime.utcnow)
+    # Usage tracking for free tier (limited to 1 total quiz)
+    total_quizzes_generated = Column(Integer, default=0)
     
     # Account management
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
@@ -68,22 +67,12 @@ class User(Base):
         if self.plan != "free":
             return True
         
-        # Check if daily limit reset
-        now = datetime.utcnow()
-        if (now - self.daily_quizzes_date).days >= 1:
-            self.daily_quizzes_used = 0
-            self.daily_quizzes_date = now
-        
-        return self.daily_quizzes_used < 3
+        # Free users limited to 1 total quiz
+        return self.total_quizzes_generated < 1
     
-    def increment_daily_usage(self):
-        """Increment daily quiz count"""
-        now = datetime.utcnow()
-        if (now - self.daily_quizzes_date).days >= 1:
-            self.daily_quizzes_used = 1
-            self.daily_quizzes_date = now
-        else:
-            self.daily_quizzes_used += 1
+    def increment_quiz_count(self):
+        """Increment total quiz count for tracking"""
+        self.total_quizzes_generated += 1
 
 
 class Quiz(Base):

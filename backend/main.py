@@ -253,21 +253,39 @@ async def upload_and_generate(
     """
     Upload PDF and generate AI quiz for authenticated user.
     Enforces usage limits based on subscription plan.
+    - Free users: Limited to 1 total quiz, max 10 MB file size
+    - Pro users: Unlimited quizzes, no file size limit
     """
+    # File size validation for free users (10 MB = 10,485,760 bytes)
+    MAX_FILE_SIZE_FREE = 10 * 1024 * 1024  # 10 MB
+    if current_user.plan == "free":
+        contents = await file.read()
+        if len(contents) > MAX_FILE_SIZE_FREE:
+            raise HTTPException(
+                status_code=413,
+                detail={
+                    "error": "file_too_large",
+                    "message": f"Free users cannot upload files larger than 10 MB. Your file is {len(contents) / (1024*1024):.2f} MB. Upgrade to Pro for unlimited file sizes!",
+                    "max_size_mb": 10,
+                    "your_size_mb": round(len(contents) / (1024*1024), 2),
+                },
+            )
+    else:
+        contents = await file.read()
+    
     # Check usage limit
     if not current_user.can_create_quiz():
         raise HTTPException(
             status_code=429,
             detail={
-                "error": "daily_limit_reached",
-                "message": f"Free limit of 3 quizzes/day reached. Upgrade to Pro for unlimited access!",
+                "error": "limit_reached",
+                "message": f"Free users are limited to 1 quiz. You have already generated your free quiz. Upgrade to Pro for unlimited quizzes!",
                 "remaining": 0,
-                "limit": 3,
+                "limit": 1,
             },
         )
 
     # Extract text from PDF
-    contents = await file.read()
     text = extract_text_from_pdf(contents)
 
     if not text or len(text.strip()) < 50:
@@ -291,7 +309,7 @@ async def upload_and_generate(
     
     # Increment usage for free users
     if current_user.plan == "free":
-        current_user.increment_daily_usage()
+        current_user.increment_quiz_count()
     
     db.commit()
     db.refresh(current_user)
@@ -302,9 +320,9 @@ async def upload_and_generate(
         "quiz": quiz,
         "usage": {
             "plan": current_user.plan,
-            "daily_used": current_user.daily_quizzes_used if current_user.plan == "free" else 0,
-            "daily_limit": 3 if current_user.plan == "free" else -1,
-            "remaining": max(0, 3 - current_user.daily_quizzes_used) if current_user.plan == "free" else -1,
+            "quizzes_generated": current_user.total_quizzes_generated if current_user.plan == "free" else 0,
+            "quiz_limit": 1 if current_user.plan == "free" else -1,
+            "remaining": max(0, 1 - current_user.total_quizzes_generated) if current_user.plan == "free" else -1,
         },
     }
 
@@ -384,11 +402,15 @@ def _create_pdf_bytes(quiz: dict, include_answers: bool = False) -> BytesIO:
 
 
 @app.get("/quiz/{quiz_id}/download")
-async def download_quiz(quiz_id: int, db: Session = Depends(get_db)):
+async def download_quiz(quiz_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Return the quiz as a printable PDF (questions + options)."""
     db_quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
     if not db_quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
+    
+    # Verify ownership
+    if db_quiz.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this quiz")
 
     quiz_data = db_quiz.quiz_data
     pdf_bytes = _create_pdf_bytes(quiz_data, include_answers=False)
@@ -397,11 +419,15 @@ async def download_quiz(quiz_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/quiz/{quiz_id}/answers")
-async def download_answer_sheet(quiz_id: int, db: Session = Depends(get_db)):
+async def download_answer_sheet(quiz_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Return the answer sheet as PDF (correct answers + explanations)."""
     db_quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
     if not db_quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
+    
+    # Verify ownership
+    if db_quiz.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this quiz")
 
     quiz_data = db_quiz.quiz_data
     pdf_bytes = _create_pdf_bytes(quiz_data, include_answers=True)
@@ -417,9 +443,11 @@ async def usage_status(current_user: User = Depends(get_current_user), db: Sessi
     return {
         "plan": current_user.plan,
         "subscription_active": current_user.subscription_active,
-        "daily_used": current_user.daily_quizzes_used if current_user.plan == "free" else 0,
-        "daily_limit": 3 if current_user.plan == "free" else -1,
-        "remaining": max(0, 3 - current_user.daily_quizzes_used) if current_user.plan == "free" else -1,
+        "is_pro": current_user.plan != "free",
+        "quizzes_generated": current_user.total_quizzes_generated if current_user.plan == "free" else 0,
+        "quiz_limit": 1 if current_user.plan == "free" else -1,
+        "remaining": max(0, 1 - current_user.total_quizzes_generated) if current_user.plan == "free" else -1,
+        "limit": 1 if current_user.plan == "free" else -1,
     }
 
 
