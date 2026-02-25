@@ -15,6 +15,13 @@ import time
 from datetime import datetime, timedelta
 from typing import Optional
 from collections import defaultdict
+from io import BytesIO
+
+from fastapi.responses import StreamingResponse
+
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.utils import simpleSplit
 
 from dotenv import load_dotenv
 load_dotenv()  # Load .env for local development (Docker uses env_file)
@@ -300,6 +307,106 @@ async def upload_and_generate(
             "remaining": max(0, 3 - current_user.daily_quizzes_used) if current_user.plan == "free" else -1,
         },
     }
+
+
+def _create_pdf_bytes(quiz: dict, include_answers: bool = False) -> BytesIO:
+    """Create a PDF bytes buffer from quiz dict. If include_answers is True,
+    include the correct answer and explanations.
+    """
+    buffer = BytesIO()
+    width, height = letter
+    c = canvas.Canvas(buffer, pagesize=letter)
+    margin_x = 40
+    margin_y = 72
+    y = height - margin_y
+    font_name = "Helvetica"
+    question_font_size = 12
+    option_font_size = 11
+    leading = 14
+
+    c.setTitle("StudyQuizAI Quiz")
+
+    questions = quiz.get("questions", [])
+
+    for idx, q in enumerate(questions, start=1):
+        # Page break if not enough space
+        if y < margin_y + 120:
+            c.showPage()
+            y = height - margin_y
+
+        # Question header
+        q_header = f"Q{idx}. {q.get('question', '')}"
+        q_lines = simpleSplit(q_header, font_name, question_font_size, width - 2 * margin_x)
+        c.setFont(font_name, question_font_size)
+        for line in q_lines:
+            c.drawString(margin_x, y, line)
+            y -= leading
+
+        # Options
+        options = q.get("options", [])
+        opt_labels = ["A", "B", "C", "D"]
+        c.setFont(font_name, option_font_size)
+        for i, opt in enumerate(options):
+            opt_text = f"  {opt_labels[i]}. {opt.get('text', '')}"
+            opt_lines = simpleSplit(opt_text, font_name, option_font_size, width - 2 * margin_x)
+            for line in opt_lines:
+                c.drawString(margin_x + 8, y, line)
+                y -= leading
+
+        # If answers requested, add correct answer and explanation
+        if include_answers:
+            # Find correct option
+            correct = None
+            for i, opt in enumerate(options):
+                if opt.get("is_correct"):
+                    correct = (opt_labels[i], opt.get("explanation", ""))
+                    break
+
+            if correct:
+                ans_text = f"Answer: {correct[0]}"
+                ans_lines = simpleSplit(ans_text, font_name, option_font_size, width - 2 * margin_x)
+                for line in ans_lines:
+                    c.drawString(margin_x + 8, y, line)
+                    y -= leading
+
+                # Explanation
+                expl_lines = simpleSplit(f"Explanation: {correct[1]}", font_name, option_font_size, width - 2 * margin_x)
+                for line in expl_lines:
+                    c.drawString(margin_x + 8, y, line)
+                    y -= leading
+
+        # Add spacing between questions
+        y -= leading
+
+    c.save()
+    buffer.seek(0)
+    return buffer
+
+
+@app.get("/quiz/{quiz_id}/download")
+async def download_quiz(quiz_id: int, db: Session = Depends(get_db)):
+    """Return the quiz as a printable PDF (questions + options)."""
+    db_quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
+    if not db_quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+
+    quiz_data = db_quiz.quiz_data
+    pdf_bytes = _create_pdf_bytes(quiz_data, include_answers=False)
+    headers = {"Content-Disposition": f"attachment; filename=quiz_{quiz_id}.pdf"}
+    return StreamingResponse(pdf_bytes, media_type="application/pdf", headers=headers)
+
+
+@app.get("/quiz/{quiz_id}/answers")
+async def download_answer_sheet(quiz_id: int, db: Session = Depends(get_db)):
+    """Return the answer sheet as PDF (correct answers + explanations)."""
+    db_quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
+    if not db_quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+
+    quiz_data = db_quiz.quiz_data
+    pdf_bytes = _create_pdf_bytes(quiz_data, include_answers=True)
+    headers = {"Content-Disposition": f"attachment; filename=answers_{quiz_id}.pdf"}
+    return StreamingResponse(pdf_bytes, media_type="application/pdf", headers=headers)
 
 
 @app.get("/usage-status")

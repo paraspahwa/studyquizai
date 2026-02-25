@@ -1,4 +1,4 @@
-export default function ResultsSummary({ results, onRestart, onUpgrade, isPro }) {
+export default function ResultsSummary({ results, onRestart, onUpgrade, isPro, quiz }) {
   const { score, total } = results;
   const pct = Math.round((score / total) * 100);
 
@@ -43,6 +43,54 @@ export default function ResultsSummary({ results, onRestart, onUpgrade, isPro })
         <div style={styles.buttons}>
           <button style={styles.retryBtn} onClick={onRestart}>
             📄 New Quiz
+          </button>
+          <button
+            style={styles.retryBtn}
+            onClick={async () => {
+              if (!quiz || !quiz.id) return;
+              const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
+              try {
+                const res = await fetch(`${API}/quiz/${quiz.id}/download`);
+                if (!res.ok) throw new Error("Download failed");
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `quiz_${quiz.id}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+              } catch (e) {
+                console.error(e);
+              }
+            }}
+          >
+            ⬇️ Download Quiz (PDF)
+          </button>
+          <button
+            style={styles.retryBtn}
+            onClick={async () => {
+              if (!quiz || !quiz.id) return;
+              const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
+              try {
+                const res = await fetch(`${API}/quiz/${quiz.id}/answers`);
+                if (!res.ok) throw new Error("Download failed");
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `answers_${quiz.id}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+              } catch (e) {
+                console.error(e);
+              }
+            }}
+          >
+            🧾 Download Answers (PDF)
           </button>
           {!isPro && (
             <button style={styles.upgradeBtn} onClick={onUpgrade}>

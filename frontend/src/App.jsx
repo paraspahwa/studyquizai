@@ -129,6 +129,7 @@ export default function App() {
           </nav>
           <ResultsSummary
             results={results}
+            quiz={quiz}
             onRestart={handleRestart}
             onUpgrade={() => setStage("pricing")}
             isPro={isPro}

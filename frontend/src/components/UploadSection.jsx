@@ -56,7 +56,8 @@ export default function UploadSection({ onGenerate, usage, onUpgrade }) {
         return;
       }
 
-      onGenerate(data.quiz, data.usage);
+      // include the returned quiz_id inside the quiz object for later downloads
+      onGenerate({ ...data.quiz, id: data.quiz_id }, data.usage);
     } catch (err) {
       setError(err.message);
     } finally {
