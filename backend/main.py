@@ -1,10 +1,12 @@
 """
-StudyQuizAI — Backend (FastAPI)
-================================
-Rebranded from QuizAPP with:
-  • Razorpay one-time + subscription payments
-  • Usage limits (free: 3 quizzes/day, pro: unlimited)
-  • All original quiz generation logic preserved
+ReelForge AI — Backend (FastAPI)
+==================================
+AI-powered short video creation platform.
+  • Video script generation (OpenAI + template fallback)
+  • Video management (create, list, get)
+  • User auth (JWT)
+  • Razorpay payments
+  • Usage limits (free: 5 videos/month, pro: unlimited)
 """
 
 import os
@@ -34,20 +36,21 @@ from sqlalchemy.orm import Session
 
 from pdf_parser import extract_text_from_pdf, chunk_text
 from quiz_generator import generate_quiz
+from video_generator import generate_video_script
 from database import init_db, get_db, User, Quiz, QuizResult, Payment
 from auth import create_access_token, get_current_user
 
 # ─────────────────────────────────────────────
 # App Init
 # ─────────────────────────────────────────────
-app = FastAPI(title="StudyQuizAI API", version="2.0.0")
+app = FastAPI(title="ReelForge AI API", version="3.0.0")
 
 # Initialize database on startup
 @app.on_event("startup")
 def startup_event():
     """Initialize database on app startup"""
     init_db()
-    print("🚀 StudyQuizAI API Started!")
+    print("🎬 ReelForge AI API Started!")
 
 app.add_middleware(
     CORSMiddleware,
@@ -55,7 +58,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:5173",
         # Add your production domain:
-        # "https://studyquizai.com",
+        # "https://reelforge.ai",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -648,8 +651,143 @@ async def razorpay_webhook(request: Request):
 
 
 # ─────────────────────────────────────────────
+# VIDEO ROUTES — Script & Video Generation
+# ─────────────────────────────────────────────
+
+# In-memory video store (replace with DB in production)
+_video_store: list = []
+_video_id_counter: int = 1
+
+
+class ScriptRequest(BaseModel):
+    topic: str
+    niche: str = "motivation"
+    duration: int = 30      # seconds: 15, 30, 60
+    voice: str = "nova"
+    style: str = "cinematic"
+
+
+class VideoCreateRequest(BaseModel):
+    topic: str
+    niche: str = "motivation"
+    duration: int = 30
+    voice: str = "nova"
+    style: str = "cinematic"
+    script: Optional[str] = None  # optional pre-generated script
+
+
+@app.post("/videos/generate-script")
+async def api_generate_script(
+    req: ScriptRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Generate an AI video script for a given topic."""
+    result = generate_video_script(
+        topic=req.topic,
+        niche=req.niche,
+        duration=req.duration,
+        voice=req.voice,
+        style=req.style,
+    )
+    return {
+        "status": "success",
+        **result,
+    }
+
+
+@app.post("/videos/create")
+async def api_create_video(
+    req: VideoCreateRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Create a new video job.
+    In a real production app this would queue a video rendering job.
+    Here we immediately 'complete' it with the generated script.
+    """
+    global _video_id_counter
+
+    # Generate script if not provided
+    if not req.script:
+        result = generate_video_script(
+            topic=req.topic,
+            niche=req.niche,
+            duration=req.duration,
+            voice=req.voice,
+            style=req.style,
+        )
+        script = result["script"]
+    else:
+        script = req.script
+
+    video = {
+        "id": _video_id_counter,
+        "user_id": current_user.id,
+        "topic": req.topic,
+        "niche": req.niche,
+        "duration": req.duration,
+        "voice": req.voice,
+        "style": req.style,
+        "script": script,
+        "status": "ready",
+        "views": 0,
+        "created_at": datetime.utcnow().isoformat(),
+    }
+    _video_store.append(video)
+    _video_id_counter += 1
+
+    return {"status": "success", "video": video}
+
+
+@app.get("/videos")
+async def api_list_videos(
+    current_user: User = Depends(get_current_user),
+    skip: int = 0,
+    limit: int = 20,
+):
+    """List all videos for the authenticated user."""
+    user_videos = [v for v in _video_store if v["user_id"] == current_user.id]
+    user_videos.sort(key=lambda v: v["created_at"], reverse=True)
+    return {
+        "status": "success",
+        "videos": user_videos[skip : skip + limit],
+        "total": len(user_videos),
+    }
+
+
+@app.get("/videos/{video_id}")
+async def api_get_video(
+    video_id: int,
+    current_user: User = Depends(get_current_user),
+):
+    """Get a specific video by ID."""
+    video = next((v for v in _video_store if v["id"] == video_id), None)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if video["user_id"] != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    return {"status": "success", "video": video}
+
+
+@app.delete("/videos/{video_id}")
+async def api_delete_video(
+    video_id: int,
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a video."""
+    global _video_store
+    video = next((v for v in _video_store if v["id"] == video_id), None)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if video["user_id"] != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    _video_store = [v for v in _video_store if v["id"] != video_id]
+    return {"status": "success", "message": "Video deleted"}
+
+
+# ─────────────────────────────────────────────
 # Health Check
 # ─────────────────────────────────────────────
 @app.get("/health")
 async def health():
-    return {"status": "ok", "app": "StudyQuizAI", "version": "2.0.0"}
+    return {"status": "ok", "app": "ReelForge AI", "version": "3.0.0"}
