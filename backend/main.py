@@ -53,6 +53,8 @@ class SubscriptionCreate(BaseModel):
     notes: Optional[str] = None
     color: Optional[str] = None
     is_active: bool = True
+    usage_rating: Optional[int] = None  # 1 (never) – 5 (daily)
+    cancel_url: Optional[str] = None
 
 
 class SubscriptionUpdate(BaseModel):
@@ -65,6 +67,8 @@ class SubscriptionUpdate(BaseModel):
     notes: Optional[str] = None
     color: Optional[str] = None
     is_active: Optional[bool] = None
+    usage_rating: Optional[int] = None
+    cancel_url: Optional[str] = None
 
 
 class OrderRequest(BaseModel):
@@ -217,6 +221,8 @@ def create_subscription(
         notes=req.notes,
         color=req.color,
         is_active=req.is_active,
+        usage_rating=req.usage_rating,
+        cancel_url=req.cancel_url,
     )
     db.add(sub)
     db.commit()
@@ -260,6 +266,10 @@ def update_subscription(
         sub.color = req.color
     if req.is_active is not None:
         sub.is_active = req.is_active
+    if req.usage_rating is not None:
+        sub.usage_rating = req.usage_rating
+    if req.cancel_url is not None:
+        sub.cancel_url = req.cancel_url
     sub.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(sub)
@@ -312,6 +322,10 @@ def get_analytics(
     # Most expensive
     sorted_subs = sorted(subs, key=lambda s: _monthly_cost(s), reverse=True)
 
+    # Waste detection: low-rated (1-2 stars) active subscriptions
+    waste_subs = [s for s in subs if s.usage_rating and s.usage_rating <= 2]
+    waste_monthly = sum(_monthly_cost(s) for s in waste_subs)
+
     return {
         "monthly_total": round(monthly_total, 2),
         "yearly_total": round(yearly_total, 2),
@@ -319,6 +333,9 @@ def get_analytics(
         "by_category": {k: round(v, 2) for k, v in by_category.items()},
         "upcoming_renewals": upcoming[:5],
         "most_expensive": [_sub_dict(s) for s in sorted_subs[:3]],
+        "waste_subs": [_sub_dict(s) for s in waste_subs],
+        "waste_monthly": round(waste_monthly, 2),
+        "potential_yearly_savings": round(waste_monthly * 12, 2),
     }
 
 
@@ -432,6 +449,8 @@ def _sub_dict(sub: Subscription) -> dict:
         "is_active": sub.is_active,
         "notes": sub.notes,
         "color": sub.color,
+        "usage_rating": sub.usage_rating,
+        "cancel_url": sub.cancel_url,
         "monthly_cost": round(_monthly_cost(sub), 2),
         "created_at": sub.created_at.isoformat() if sub.created_at else None,
     }

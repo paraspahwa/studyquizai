@@ -155,19 +155,48 @@ export default function LandingScreen({ navigation }) {
             ))}
           </View>
 
-          <View style={[s.strategyCard, { borderColor: "rgba(124,58,237,0.3)" }]}>
-            <Text style={s.strategyTitle}>🏆  Competitive Advantage</Text>
+        </View>
+
+        {/* COMPETITOR COMPARISON TABLE */}
+        <View style={[s.section, { backgroundColor: colors.bg2 }]}>
+          <Text style={s.sectionTitle}>Why SubTrack wins</Text>
+          <Text style={s.sectionSub}>We built the tool we wished existed — focused, honest, and actually useful.</Text>
+
+          {/* Table header */}
+          <View style={s.tableWrap}>
+            <View style={s.tableHead}>
+              <Text style={[s.thCell, s.thFeature]}>Feature</Text>
+              <Text style={[s.thCell, s.thSubTrack]}>SubTrack ✓</Text>
+              <Text style={s.thCell}>Bobby</Text>
+              <Text style={s.thCell}>Mint/YNAB</Text>
+              <Text style={s.thCell}>Spreadsheet</Text>
+            </View>
+
             {[
-              { label: "vs. Mint / YNAB", note: "Focused purely on subs — simpler, no bank linking required" },
-              { label: "vs. Truebill",    note: "No upsells, no shady fees, no data brokering" },
-              { label: "vs. Spreadsheets",note: "Auto renewal math, alerts, zero maintenance overhead" },
-            ].map((c, i) => (
-              <View key={i} style={s.compRow}>
-                <Text style={s.compLabel}>{c.label}</Text>
-                <Text style={s.compNote}>{c.note}</Text>
+              { feature: "No bank linking",     st: true,  bobby: true,  mint: false, sheet: true  },
+              { feature: "Mobile app",          st: true,  bobby: true,  mint: true,  sheet: false },
+              { feature: "Waste detection",     st: true,  bobby: false, mint: false, sheet: false },
+              { feature: "Cancel direct links", st: true,  bobby: false, mint: false, sheet: false },
+              { feature: "Service templates",   st: true,  bobby: true,  mint: false, sheet: false },
+              { feature: "Free tier (10 subs)", st: true,  bobby: false, mint: true,  sheet: true  },
+              { feature: "No ads / data selling",st: true, bobby: true,  mint: false, sheet: true  },
+              { feature: "Open source backend", st: true,  bobby: false, mint: false, sheet: false },
+              { feature: "Savings calculator",  st: true,  bobby: false, mint: true,  sheet: false },
+              { feature: "Pro price",           st: "$9",  bobby: "$19", mint: "$15", sheet: "$0"  },
+            ].map((row, i) => (
+              <View key={i} style={[s.tableRow, i % 2 === 0 ? s.tableRowAlt : {}]}>
+                <Text style={[s.tdCell, s.tdFeature]} numberOfLines={1}>{row.feature}</Text>
+                <Text style={[s.tdCell, s.tdSubTrack]}>{typeof row.st === "boolean" ? (row.st ? "✅" : "❌") : row.st}</Text>
+                <Text style={s.tdCell}>{typeof row.bobby === "boolean" ? (row.bobby ? "✅" : "❌") : row.bobby}</Text>
+                <Text style={s.tdCell}>{typeof row.mint === "boolean" ? (row.mint ? "✅" : "❌") : row.mint}</Text>
+                <Text style={s.tdCell}>{typeof row.sheet === "boolean" ? (row.sheet ? "✅" : "❌") : row.sheet}</Text>
               </View>
             ))}
           </View>
+
+          <Text style={s.tableNote}>
+            * Bobby is closest competitor. SubTrack adds waste detection + cancel links that no other tracker has.
+          </Text>
         </View>
 
         {/* CTA */}
@@ -247,6 +276,18 @@ const s = StyleSheet.create({
   compRow:         { marginBottom: 10 },
   compLabel:       { fontFamily: "Inter_700Bold", fontSize: 13, color: colors.primaryLight, marginBottom: 3 },
   compNote:        { fontFamily: "Inter_400Regular", fontSize: 13, color: colors.text3, lineHeight: 18 },
+
+  tableWrap:       { borderWidth: 1, borderColor: colors.border2, borderRadius: 14, overflow: "hidden", marginBottom: 12 },
+  tableHead:       { flexDirection: "row", backgroundColor: "rgba(124,58,237,0.15)", paddingVertical: 10 },
+  thCell:          { flex: 1, fontFamily: "Inter_700Bold", fontSize: 10, color: colors.text3, textAlign: "center", textTransform: "uppercase", letterSpacing: 0.3 },
+  thFeature:       { flex: 2, textAlign: "left", paddingLeft: 12 },
+  thSubTrack:      { color: colors.primaryLight },
+  tableRow:        { flexDirection: "row", paddingVertical: 10, alignItems: "center" },
+  tableRowAlt:     { backgroundColor: "rgba(255,255,255,0.02)" },
+  tdCell:          { flex: 1, fontFamily: "Inter_400Regular", fontSize: 12, color: colors.text3, textAlign: "center" },
+  tdFeature:       { flex: 2, fontFamily: "Inter_500Medium", fontSize: 12, color: colors.text2, textAlign: "left", paddingLeft: 12 },
+  tdSubTrack:      { fontFamily: "Inter_700Bold", color: colors.success },
+  tableNote:       { fontFamily: "Inter_400Regular", fontSize: 12, color: colors.text4, lineHeight: 18, marginTop: 4 },
 
   cta:             { padding: 40, alignItems: "center", backgroundColor: colors.bg2 },
   ctaIcon:         { fontSize: 48, marginBottom: 12 },

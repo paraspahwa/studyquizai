@@ -86,6 +86,12 @@ class Subscription(Base):
     is_active = Column(Boolean, default=True)
     notes = Column(Text, nullable=True)
 
+    # Usage rating: 1 = never use, 5 = use daily. Drives waste detection.
+    usage_rating = Column(Integer, nullable=True)  # 1–5
+
+    # Direct cancellation URL for this service
+    cancel_url = Column(String, nullable=True)
+
     # Logo / color for display
     color = Column(String, nullable=True)  # hex color
 

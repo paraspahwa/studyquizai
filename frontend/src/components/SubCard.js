@@ -1,5 +1,7 @@
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Linking } from "react-native";
 import { colors, categoryColors } from "../theme";
+
+const RATING_COLORS = ["", colors.error, "#f97316", colors.warning, "#84cc16", colors.success];
 
 function daysUntil(dateStr) {
   if (!dateStr) return null;
@@ -12,15 +14,17 @@ function fmtCurrency(amount, currency = "USD") {
 
 export default function SubCard({ sub, onEdit, onDelete }) {
   const days = daysUntil(sub.next_billing_date);
-  const catColor = sub.color || categoryColors[sub.category] || "#475569";
+  const catColor  = sub.color || categoryColors[sub.category] || "#475569";
   const isUrgent  = days !== null && days >= 0 && days <= 7;
   const isOverdue = days !== null && days < 0;
+  const isWaste   = sub.usage_rating !== null && sub.usage_rating !== undefined && sub.usage_rating <= 2;
 
   return (
     <View style={[
       s.card,
-      isOverdue ? { borderColor: "rgba(239,68,68,0.4)" }
-        : isUrgent ? { borderColor: "rgba(245,158,11,0.4)" }
+      isWaste   ? { borderColor: "rgba(239,68,68,0.5)", borderLeftWidth: 3, borderLeftColor: colors.error }
+        : isOverdue ? { borderColor: "rgba(239,68,68,0.4)" }
+        : isUrgent  ? { borderColor: "rgba(245,158,11,0.4)" }
         : {},
       !sub.is_active && { opacity: 0.55 },
     ]}>
@@ -63,6 +67,25 @@ export default function SubCard({ sub, onEdit, onDelete }) {
         )}
       </View>
 
+      {/* Usage rating row */}
+      {sub.usage_rating && (
+        <View style={s.ratingRow}>
+          <Text style={[s.ratingDot, { color: RATING_COLORS[sub.usage_rating] }]}>
+            {"★".repeat(sub.usage_rating)}{"☆".repeat(5 - sub.usage_rating)}
+          </Text>
+          {isWaste && (
+            <View style={s.wasteBadge}>
+              <Text style={s.wasteText}>💸 Consider cancelling</Text>
+            </View>
+          )}
+          {sub.cancel_url && isWaste && (
+            <TouchableOpacity onPress={() => Linking.openURL(sub.cancel_url)} style={s.cancelLink}>
+              <Text style={s.cancelLinkText}>Cancel →</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
       {!sub.is_active && (
         <View style={s.pausedBadge}>
           <Text style={s.pausedText}>Paused / Cancelled</Text>
@@ -91,6 +114,12 @@ const s = StyleSheet.create({
   dueNormal:  { backgroundColor: colors.bg },
   dueText:    { fontFamily: "Inter_600SemiBold", fontSize: 13 },
   dueDate:    { fontFamily: "Inter_400Regular", fontSize: 11, color: colors.text4, marginTop: 2 },
+  ratingRow:  { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12, flexWrap: "wrap" },
+  ratingDot:  { fontFamily: "Inter_500Medium", fontSize: 14, letterSpacing: 1 },
+  wasteBadge: { backgroundColor: "rgba(239,68,68,0.12)", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  wasteText:  { fontFamily: "Inter_600SemiBold", fontSize: 11, color: colors.error },
+  cancelLink: { marginLeft: "auto" },
+  cancelLinkText: { fontFamily: "Inter_700Bold", fontSize: 12, color: colors.primaryLight },
   pausedBadge:{ marginTop: 12, backgroundColor: "rgba(100,116,139,0.15)", borderRadius: 8, padding: 6, alignItems: "center" },
   pausedText: { fontFamily: "Inter_500Medium", fontSize: 12, color: colors.text4 },
 });
